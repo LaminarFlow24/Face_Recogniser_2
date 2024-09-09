@@ -1,0 +1,14 @@
+numpy
+Pillow
+dataset
+facenet_pytorch
+Flask
+flask_restplus
+joblib
+seaborn
+scikit_learn
+torch
+torchvision
+Werkzeug
+opencv-python
+matplotlib
