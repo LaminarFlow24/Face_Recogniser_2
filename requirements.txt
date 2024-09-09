@@ -12,3 +12,5 @@ torchvision
 Werkzeug
 opencv-python
 matplotlib
+openpyxl
+boto3
