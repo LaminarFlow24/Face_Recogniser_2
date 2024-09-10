@@ -3,21 +3,56 @@ import joblib
 import pandas as pd
 from PIL import Image
 import streamlit as st
+import boto3
 from face_recognition import preprocessing
 
-# Cache the attendance data to prevent reloading
-@st.cache_data
-def load_attendance_data():
-    return pd.read_excel('students_attendance_september.xlsx')
+from dotenv import load_dotenv
+import os
 
-# Cache the model so it's loaded only once
+# Load .env file
+load_dotenv()
+
+# Access AWS credentials
+aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
+aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+aws_region = os.getenv("AWS_REGION")
+
+# Initialize the S3 client using credentials stored in your .env file
+s3 = boto3.client('s3', 
+                  aws_access_key_id=aws_access_key_id,
+                  aws_secret_access_key=aws_secret_access_key,
+                  region_name=aws_region)
+
+
+bucket_name = "yashasbucket247"
+file_key = "attendance-data/E2_attendance_september.xlsx"  # S3 key for the file
+model_file_key = "trained_models/E2.pkl"  # S3 key for the face recognition model
+
+# Function to download attendance file from S3
+@st.cache_data
+def load_attendance_data_from_s3():
+    obj = s3.get_object(Bucket=bucket_name, Key=file_key)
+    return pd.read_excel(io.BytesIO(obj['Body'].read()))
+
+# Function to download and load face recognizer model from S3
 @st.cache_resource
-def load_face_recogniser_model():
-    return joblib.load('model/face_recogniserL.pkl')
+def load_face_recogniser_model_from_s3():
+    model_obj = s3.get_object(Bucket=bucket_name, Key=model_file_key)
+    return joblib.load(io.BytesIO(model_obj['Body'].read()))
+
+divs = ['SE1','SE2','SE3','SE4']
+div = st.selectbox("Choose a division", divs)
+
+if div == 'SE2':
+    
+    face_recogniser = load_face_recogniser_model_from_s3()
+else:
+    st.write("Model not trained for this division")
+    st.stop()
 
 # Initialize session state for attendance DataFrame
 if 'df_attendance' not in st.session_state:
-    st.session_state.df_attendance = load_attendance_data()
+    st.session_state.df_attendance = load_attendance_data_from_s3()
 
 # Initialize session state for tracking date changes
 if 'previous_date' not in st.session_state:
@@ -27,8 +62,12 @@ if 'previous_date' not in st.session_state:
 if 'uploader_key' not in st.session_state:
     st.session_state.uploader_key = 0
 
+# Initialize session state for tracking reupload button click
+if 'reupload_clicked' not in st.session_state:
+    st.session_state.reupload_clicked = False
+
 # Load the face recognizer model
-face_recogniser = load_face_recogniser_model()
+# face_recogniser = load_face_recogniser_model()
 preprocess = preprocessing.ExifOrientationNormalize()
 
 # Streamlit interface
@@ -109,7 +148,7 @@ if uploaded_file is not None:
         
 # Option to stop and download the updated sheet
 if st.button('Stop and Download Attendance Sheet'):
-    # Save the updated Excel file
+    # Save the updated Excel file to a BytesIO object
     output = io.BytesIO()
     st.session_state.df_attendance.to_excel(output, index=False)
     output.seek(0)
@@ -119,3 +158,10 @@ if st.button('Stop and Download Attendance Sheet'):
                        data=output, 
                        file_name='updated_attendance.xlsx', 
                        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+    # Reupload the modified file to S3 without causing a script re-run
+    if st.button('Reupload to S3') and not st.session_state.reupload_clicked:
+        # Set session state to prevent re-execution
+        st.session_state.reupload_clicked = True
+        s3.put_object(Bucket=bucket_name, Key=file_key, Body=output.getvalue())
+        st.success("File successfully uploaded to S3.")
