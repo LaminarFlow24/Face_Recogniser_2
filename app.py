@@ -12,10 +12,11 @@ import os
 # Load .env file
 load_dotenv()
 
+
 # Access AWS credentials
-aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
-aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-aws_region = os.getenv("AWS_REGION")
+aws_access_key_id = st.secrets("AWS_ACCESS_KEY_ID")
+aws_secret_access_key = st.secrets("AWS_SECRET_ACCESS_KEY")
+aws_region = st.secrets("AWS_REGION")
 
 # Initialize the S3 client using credentials stored in your .env file
 s3 = boto3.client('s3', 
