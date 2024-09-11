@@ -5,7 +5,7 @@ from PIL import Image
 import streamlit as st
 import boto3
 from face_recognition import preprocessing
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 import os
 
 # # Load .env file
