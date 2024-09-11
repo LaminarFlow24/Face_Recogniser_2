@@ -5,18 +5,16 @@ from PIL import Image
 import streamlit as st
 import boto3
 from face_recognition import preprocessing
-
 from dotenv import load_dotenv
 import os
 
 # Load .env file
 load_dotenv()
 
-
 # Access AWS credentials
-aws_access_key_id = st.secrets(AWS_ACCESS_KEY_ID)
-aws_secret_access_key = st.secrets(AWS_SECRET_ACCESS_KEY)
-aws_region = st.secrets(AWS_REGION)
+aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
+aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+aws_region = os.getenv("AWS_REGION")
 
 # Initialize the S3 client using credentials stored in your .env file
 s3 = boto3.client('s3', 
@@ -24,15 +22,14 @@ s3 = boto3.client('s3',
                   aws_secret_access_key=aws_secret_access_key,
                   region_name=aws_region)
 
-
 bucket_name = "yashasbucket247"
-file_key = "attendance-data/E2_attendance_september.xlsx"  # S3 key for the file
+attendance_file_key = "attendance-data/SE2_September.xlsx"  # S3 key for attendance file
 model_file_key = "trained_models/E2.pkl"  # S3 key for the face recognition model
 
 # Function to download attendance file from S3
 @st.cache_data
 def load_attendance_data_from_s3():
-    obj = s3.get_object(Bucket=bucket_name, Key=file_key)
+    obj = s3.get_object(Bucket=bucket_name, Key=attendance_file_key)
     return pd.read_excel(io.BytesIO(obj['Body'].read()))
 
 # Function to download and load face recognizer model from S3
@@ -41,11 +38,11 @@ def load_face_recogniser_model_from_s3():
     model_obj = s3.get_object(Bucket=bucket_name, Key=model_file_key)
     return joblib.load(io.BytesIO(model_obj['Body'].read()))
 
-divs = ['SE1','SE2','SE3','SE4']
+divs = ['SE1', 'SE2', 'SE3', 'SE4']
 div = st.selectbox("Choose a division", divs)
 
 if div == 'SE2':
-    
+    # Load the face recognizer model from S3
     face_recogniser = load_face_recogniser_model_from_s3()
 else:
     st.write("Model not trained for this division")
@@ -67,8 +64,6 @@ if 'uploader_key' not in st.session_state:
 if 'reupload_clicked' not in st.session_state:
     st.session_state.reupload_clicked = False
 
-# Load the face recognizer model
-# face_recogniser = load_face_recogniser_model()
 preprocess = preprocessing.ExifOrientationNormalize()
 
 # Streamlit interface
@@ -164,5 +159,5 @@ if st.button('Stop and Download Attendance Sheet'):
     if st.button('Reupload to S3') and not st.session_state.reupload_clicked:
         # Set session state to prevent re-execution
         st.session_state.reupload_clicked = True
-        s3.put_object(Bucket=bucket_name, Key=file_key, Body=output.getvalue())
+        s3.put_object(Bucket=bucket_name, Key=attendance_file_key, Body=output.getvalue())
         st.success("File successfully uploaded to S3.")
