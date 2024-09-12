@@ -1,15 +1,10 @@
 import io
 import joblib
 import pandas as pd
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import streamlit as st
 import boto3
 from face_recognition import preprocessing
-# from dotenv import load_dotenv
-import os
-
-# # Load .env file
-# load_dotenv()
 
 # Access AWS credentials
 aws_access_key_id = st.secrets["AWS_ACCESS_KEY_ID"]
@@ -24,7 +19,7 @@ s3 = boto3.client('s3',
 
 bucket_name = "yashasbucket247"
 attendance_file_key = "attendance-data/E2_attendance_september.xlsx"  # S3 key for attendance file
-model_file_key = "trained_models/SE2_5missing.pkl"  # S3 key for the face recognition model
+model_file_key = "trained_models/SE2.pkl"  # S3 key for the face recognition model
 
 # Function to download attendance file from S3
 @st.cache_data
@@ -101,6 +96,10 @@ if uploaded_file is not None:
     # Perform face recognition
     faces = face_recogniser(img)
     
+    # Draw bounding boxes and labels on the image
+    draw = ImageDraw.Draw(img)
+    font = ImageFont.load_default()  # You can load a custom font if necessary
+
     # Display the uploaded image
     st.image(img, caption='Uploaded Image', use_column_width=True)
     
@@ -118,12 +117,20 @@ if uploaded_file is not None:
             # Add name to recognized names list
             recognized_names.append(face.top_prediction.label)
             
+            # Draw bounding box
+            draw.rectangle([face.bb.left, face.bb.top, face.bb.right, face.bb.bottom], outline="red", width=2)
+            # Draw label
+            draw.text((face.bb.left, face.bb.top - 10), f"{face.top_prediction.label} ({face.top_prediction.confidence:.2f})", fill="red", font=font)
+            
             if include_predictions:
                 st.markdown("**All Predictions:**")
                 for pred in face.all_predictions:
                     st.markdown(f"- {pred.label}: {pred.confidence:.2f}")
     else:
         st.warning("No faces detected.")
+    
+    # Display the modified image with bounding boxes and labels
+    st.image(img, caption='Processed Image with Bounding Boxes', use_column_width=True)
     
     # Update attendance in the Excel sheet stored in session state
     if recognized_names:
