@@ -24,7 +24,7 @@ s3 = boto3.client('s3',
 
 bucket_name = "yashasbucket247"
 attendance_file_key = "attendance-data/E2_attendance_september.xlsx"  # S3 key for attendance file
-model_file_key = "trained_models/E2.pkl"  # S3 key for the face recognition model
+model_file_key = "trained_models/SE2.pkl"  # S3 key for the face recognition model
 
 # Function to download attendance file from S3
 @st.cache_data
