@@ -6,6 +6,9 @@ import streamlit as st
 import boto3
 from face_recognition import preprocessing
 
+from dotenv import load_dotenv
+import os
+
 # Access AWS credentials
 aws_access_key_id = st.secrets["AWS_ACCESS_KEY_ID"]
 aws_secret_access_key = st.secrets["AWS_SECRET_ACCESS_KEY"]
@@ -19,6 +22,7 @@ s3 = boto3.client('s3',
 
 bucket_name = "yashasbucket247"
 attendance_file_key = "attendance-data/SE2_september.xlsx"  # S3 key for attendance file
+clean_attendance_file_key = "attendance-data/SE2_september_clean.xlsx"  # Key for clean attendance file
 model_file_key = "trained_models/SE2-80.pkl"  # S3 key for the face recognition model
 
 # Function to download attendance file from S3
@@ -27,7 +31,7 @@ def load_attendance_data_from_s3():
     obj = s3.get_object(Bucket=bucket_name, Key=attendance_file_key)
     return pd.read_excel(io.BytesIO(obj['Body'].read()))
 
-# Function to download and load face recognizer model from S3
+# Function to download and load face recogniser model from S3
 @st.cache_resource
 def load_face_recogniser_model_from_s3():
     model_obj = s3.get_object(Bucket=bucket_name, Key=model_file_key)
@@ -54,10 +58,6 @@ if 'previous_date' not in st.session_state:
 # Initialize session state for resetting the uploader key
 if 'uploader_key' not in st.session_state:
     st.session_state.uploader_key = 0
-
-# Initialize session state for tracking reupload button click
-if 'reupload_clicked' not in st.session_state:
-    st.session_state.reupload_clicked = False
 
 preprocess = preprocessing.ExifOrientationNormalize()
 
@@ -119,8 +119,18 @@ if uploaded_file is not None:
             
             # Draw bounding box
             draw.rectangle([face.bb.left, face.bb.top, face.bb.right, face.bb.bottom], outline="red", width=2)
-            # Draw label
-            draw.text((face.bb.left, face.bb.top - 10), f"{face.top_prediction.label} ({face.top_prediction.confidence:.2f})", fill="red", font=font)
+            
+            # Prepare label text and its size
+            label_text = f"{face.top_prediction.label} ({face.top_prediction.confidence:.2f})"
+            text_bbox = draw.textbbox((face.bb.left, face.bb.top - 10), label_text, font=font)
+            text_width = text_bbox[2] - text_bbox[0]
+            text_height = text_bbox[3] - text_bbox[1]
+            
+            # Draw black rectangle for label background
+            draw.rectangle([face.bb.left, face.bb.top - text_height, face.bb.left + text_width, face.bb.top], fill="black")
+            
+            # Draw white label text
+            draw.text((face.bb.left, face.bb.top - text_height), label_text, fill="white", font=font)
             
             if include_predictions:
                 st.markdown("**All Predictions:**")
@@ -130,7 +140,7 @@ if uploaded_file is not None:
         st.warning("No faces detected.")
     
     # Display the modified image with bounding boxes and labels
-    st.image(img, caption='Processed Image with Bounding Boxes', use_column_width=True)
+    st.image(img, caption='Processed Image with Bounding Boxes and Labels', use_column_width=True)
     
     # Update attendance in the Excel sheet stored in session state
     if recognized_names:
@@ -161,10 +171,25 @@ if st.button('Stop and Download Attendance Sheet'):
                        data=output, 
                        file_name='updated_attendance.xlsx', 
                        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    
+    # Save the output to session state for reuploading
+    st.session_state.excel_output = output
 
-    # Reupload the modified file to S3 without causing a script re-run
-    if st.button('Reupload to S3') and not st.session_state.reupload_clicked:
-        # Set session state to prevent re-execution
-        st.session_state.reupload_clicked = True
-        s3.put_object(Bucket=bucket_name, Key=attendance_file_key, Body=output.getvalue())
+# Separate button to reupload to S3
+if st.button('Reupload to S3'):
+    if 'excel_output' in st.session_state:
+        # Get the output from session state
+        s3.put_object(Bucket=bucket_name, Key=attendance_file_key, Body=st.session_state.excel_output.getvalue())
         st.success("File successfully uploaded to S3.")
+    else:
+        st.warning("No file available to upload. Please generate the file first by downloading the attendance sheet.")
+
+# Add a reset button to replace the current attendance file with a clean one
+if st.button("Reset Attendance File"):
+    # Download the clean attendance file from S3
+    clean_file_obj = s3.get_object(Bucket=bucket_name, Key=clean_attendance_file_key)
+    clean_file_data = clean_file_obj['Body'].read()
+    
+    # Upload the clean attendance file to replace the current attendance file
+    s3.put_object(Bucket=bucket_name, Key=attendance_file_key, Body=clean_file_data)
+    st.success("Attendance file has been reset successfully.")
