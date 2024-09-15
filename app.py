@@ -6,8 +6,7 @@ import streamlit as st
 import boto3
 from face_recognition import preprocessing
 
-from dotenv import load_dotenv
-import os
+
 
 # Access AWS credentials
 aws_access_key_id = st.secrets["AWS_ACCESS_KEY_ID"]
